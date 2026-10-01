@@ -5,20 +5,29 @@ import * as tmService from '../services/ticketmaster.service.js';
 import { getRsvpedTmIds } from '../services/rsvp.service.js';
 import { getFriendsCountMap } from '../utils/friendsCount.js';
 import { createError } from '../middleware/errorHandler.js';
+import ReminderSetting from '../models/ReminderSetting.js';
 
-// Attach per-event metadata (isRsvped, friendsAttendingCount) to each event
+// Returns a Set of tmIds that have an active reminder for the user
+const getReminderTmIds = async (userId) => {
+  if (!userId) return new Set();
+  const settings = await ReminderSetting.find({ user: userId, enabled: true }).select('tmId').lean();
+  return new Set(settings.map((s) => s.tmId));
+};
+
+// Attach per-event metadata (isRsvped, friendsAttendingCount, hasReminder) to each event
 const enrichEvents = async (events, userId) => {
   const tmIds = events.map((e) => e.tmId);
-  const [rsvpedSet, friendsMap] = await Promise.all([
+  const [rsvpedSet, friendsMap, reminderSet] = await Promise.all([
     getRsvpedTmIds(userId),
     getFriendsCountMap(tmIds),
+    getReminderTmIds(userId),
   ]);
 
   return events.map((e) => ({
     ...( e.toObject ? e.toObject() : e ),   // handle both Mongoose docs and plain objects
     isRsvped: rsvpedSet.has(e.tmId),
     friendsAttendingCount: friendsMap.get(e.tmId) || 0,
-    hasReminder: false, // populated properly in the reminders commit
+    hasReminder: reminderSet.has(e.tmId),
   }));
 };
 

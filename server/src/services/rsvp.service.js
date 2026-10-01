@@ -3,6 +3,7 @@
 
 import Rsvp from '../models/Rsvp.js';
 import Event from '../models/Event.js';
+import ReminderSetting from '../models/ReminderSetting.js';
 import * as tmService from './ticketmaster.service.js';
 import { getFriendsCountMap } from '../utils/friendsCount.js';
 import { createError } from '../middleware/errorHandler.js';
@@ -50,8 +51,12 @@ export const getUserRsvps = async (userId) => {
   const events = await Event.find({ tmId: { $in: tmIds } }).lean();
   const eventMap = new Map(events.map((e) => [e.tmId, e]));
 
-  // Friends counts for all RSVPed events in one aggregation
-  const friendsMap = await getFriendsCountMap(tmIds);
+  // Friends counts and reminder settings for all RSVPed events in parallel
+  const [friendsMap, reminders] = await Promise.all([
+    getFriendsCountMap(tmIds),
+    ReminderSetting.find({ user: userId, tmId: { $in: tmIds } }).lean(),
+  ]);
+  const reminderMap = new Map(reminders.map((r) => [r.tmId, r]));
 
   const now = new Date();
   const upcoming = [];
@@ -67,6 +72,8 @@ export const getUserRsvps = async (userId) => {
       rsvpCreatedAt: rsvp.createdAt,
       friendsAttendingCount: friendsMap.get(rsvp.tmId) || 0,
       isRsvped: true,
+      hasReminder: reminderMap.has(rsvp.tmId) && reminderMap.get(rsvp.tmId).enabled,
+      reminder: reminderMap.get(rsvp.tmId) || null,
     };
 
     // Server decides upcoming vs past — no date logic in the client

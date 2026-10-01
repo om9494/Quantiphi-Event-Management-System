@@ -2,6 +2,7 @@ import * as calendarService from '../services/calendar.service.js';
 import { getRsvpedTmIds } from '../services/rsvp.service.js';
 import { getFriendsCountMap } from '../utils/friendsCount.js';
 import { createError } from '../middleware/errorHandler.js';
+import ReminderSetting from '../models/ReminderSetting.js';
 
 // GET /api/events/calendar?year=&month=&city=
 export const getCalendarDates = async (req, res, next) => {
@@ -29,18 +30,22 @@ export const getEventsByDate = async (req, res, next) => {
 
     const events = await calendarService.getEventsByDate({ date, city });
 
-    // Enrich with isRsvped and friendsAttendingCount
+    // Enrich with isRsvped, friendsAttendingCount, hasReminder
     const tmIds = events.map((e) => e.tmId);
-    const [rsvpedSet, friendsMap] = await Promise.all([
+    const [rsvpedSet, friendsMap, reminders] = await Promise.all([
       getRsvpedTmIds(req.user?.id),
       getFriendsCountMap(tmIds),
+      req.user?.id
+        ? ReminderSetting.find({ user: req.user.id, tmId: { $in: tmIds }, enabled: true }).lean()
+        : Promise.resolve([]),
     ]);
+    const reminderSet = new Set(reminders.map((r) => r.tmId));
 
     const enriched = events.map((e) => ({
       ...e.toObject(),
       isRsvped: rsvpedSet.has(e.tmId),
       friendsAttendingCount: friendsMap.get(e.tmId) || 0,
-      hasReminder: false,
+      hasReminder: reminderSet.has(e.tmId),
     }));
 
     res.json({ success: true, date, data: enriched });
