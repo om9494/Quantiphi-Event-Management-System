@@ -8,6 +8,7 @@ import Event from '../models/Event.js';
 import Rsvp from '../models/Rsvp.js';
 import { createError } from '../middleware/errorHandler.js';
 import { env } from '../config/env.js';
+import { getIo } from '../socket.js';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -58,6 +59,7 @@ export const resolveInvite = async (token, { ip, userAgent, currentUserId } = {}
     const vh = visitorHash(ip || 'unknown', userAgent || 'unknown');
 
     // Upsert with unique index (shareLink, visitorHash) — duplicate clicks are silently ignored
+    let isNewClick = false;
     try {
       await LinkClick.create({
         shareLink: link._id,
@@ -65,9 +67,27 @@ export const resolveInvite = async (token, { ip, userAgent, currentUserId } = {}
         clickerUser: currentUserId || null,
         visitorHash: vh,
       });
+      isNewClick = true;
     } catch (err) {
       // Error code 11000 = MongoDB duplicate key — this visitor already clicked; ignore
       if (err.code !== 11000) throw err;
+    }
+
+    // ── Real-time update ────────────────────────────────────────────────────
+    // Only broadcast when a genuinely new unique click was recorded.
+    // "friendsAttendingCount" = total unique clicks across ALL share links for
+    // this event, computed here by a fast countDocuments call.
+    if (isNewClick) {
+      try {
+        const newCount = await LinkClick.countDocuments({ tmId: link.tmId });
+        // Emit to every client that joined the "event:<tmId>" room
+        getIo().to(`event:${link.tmId}`).emit('friends:update', {
+          tmId: link.tmId,
+          friendsAttendingCount: newCount,
+        });
+      } catch {
+        // Never let a socket error break the HTTP response
+      }
     }
   }
 

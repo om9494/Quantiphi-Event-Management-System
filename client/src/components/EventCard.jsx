@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { createRsvpApi, deleteRsvpApi } from '../api/rsvp.api.js';
 import { createInviteApi } from '../api/invite.api.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import ReminderModal from './ReminderModal.jsx';
+import { getSocket } from '../socket.js';
 
 // Formats a localDate string "YYYY-MM-DD" + localTime "HH:MM:SS" nicely
 const formatDateTime = (localDate, localTime) => {
@@ -23,6 +24,27 @@ const EventCard = ({ event, onRsvpChange }) => {
   const [hasReminder, setHasReminder] = useState(event.hasReminder || false);
   const [loadingRsvp, setLoadingRsvp] = useState(false);
   const [showReminderModal, setShowReminderModal] = useState(false);
+
+  // ── Real-time: join the event room and listen for friends-count updates ──
+  // When another user clicks a share link for this event, the server emits
+  // "friends:update" to the "event:<tmId>" room and we update the counter live.
+  useEffect(() => {
+    const socket = getSocket();
+    socket.emit('join:event', event.tmId);
+
+    const handleFriendsUpdate = ({ tmId, friendsAttendingCount }) => {
+      if (tmId === event.tmId) {
+        setFriendsCount(friendsAttendingCount);
+      }
+    };
+
+    socket.on('friends:update', handleFriendsUpdate);
+
+    return () => {
+      socket.off('friends:update', handleFriendsUpdate);
+      socket.emit('leave:event', event.tmId);
+    };
+  }, [event.tmId]);
 
   const handleRsvpToggle = async () => {
     if (!isAuth) { toast.error('Sign in to RSVP'); return; }

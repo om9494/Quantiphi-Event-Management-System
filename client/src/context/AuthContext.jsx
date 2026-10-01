@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { getMeApi } from '../api/auth.api.js';
+import { reconnectSocket, destroySocket } from '../socket.js';
 
 const AuthContext = createContext(null);
 
@@ -13,12 +14,16 @@ export const AuthProvider = ({ children }) => {
     localStorage.setItem('token', newToken);
     setToken(newToken);
     setUser(userData);
+    // Reconnect socket with the new token so the server assigns the personal room
+    reconnectSocket();
   }, []);
 
   const logout = useCallback(() => {
     localStorage.removeItem('token');
     setToken(null);
     setUser(null);
+    // Tear down socket — next getSocket() call will rebuild with no token
+    destroySocket();
   }, []);
 
   // Re-hydrate user from token on first load

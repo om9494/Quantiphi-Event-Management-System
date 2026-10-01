@@ -6,6 +6,7 @@ import Notification from '../models/Notification.js';
 import Rsvp from '../models/Rsvp.js';
 import Event from '../models/Event.js';
 import { createError } from '../middleware/errorHandler.js';
+import { getIo } from '../socket.js';
 
 // PUT /reminders/:eventId — create or update a reminder setting.
 // Rules enforced here (server-side):
@@ -88,6 +89,23 @@ export const processDueReminders = async () => {
   // Mark the processed reminders as sent
   const dueIds = due.map(({ reminder }) => reminder._id);
   await ReminderSetting.updateMany({ _id: { $in: dueIds } }, { sent: true });
+
+  // ── Real-time push ────────────────────────────────────────────────────────
+  // Push each notification to the user's personal Socket.io room so the
+  // Navbar bell updates instantly without requiring a page refresh.
+  try {
+    const io = getIo();
+    for (const notif of notifications) {
+      io.to(`user:${notif.user}`).emit('notification:new', {
+        _id: notif._id,
+        message: notif.message,
+        tmId: notif.tmId,
+        createdAt: notif.createdAt,
+      });
+    }
+  } catch {
+    // Never let a socket error break the cron job
+  }
 
   return notifications;
 };
