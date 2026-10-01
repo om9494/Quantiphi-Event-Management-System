@@ -6,6 +6,7 @@ import usersRouter from './users.js';
 import eventsRouter from './events.js';
 import rsvpsRouter from './rsvps.js';
 import remindersRouter from './reminders.js';
+import invitesRouter from './invites.js';
 
 const router = Router();
 
@@ -15,9 +16,6 @@ router.use('/users', usersRouter);
 router.use('/events', eventsRouter);
 router.use('/rsvps', rsvpsRouter);
 router.use('/reminders', remindersRouter);
-
-// /reminders/notifications is nested under reminders router
-// invites — added in next commit
-// router.use('/invites', invitesRouter);
+router.use('/invites', invitesRouter);
 
 export default router;
