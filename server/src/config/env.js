@@ -1,5 +1,6 @@
-// Centralised env config — import this instead of process.env directly
-// so we get an early, readable error if a required variable is missing.
+// Centralised env config — import this instead of process.env directly.
+// Throws early with a readable message if any required variable is missing,
+// so you catch misconfiguration at startup, not mid-request.
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -17,7 +18,7 @@ for (const key of required) {
 }
 
 export const env = {
-  port: process.env.PORT || 5000,
+  port: Number(process.env.PORT) || 5000,
   nodeEnv: process.env.NODE_ENV || 'development',
   mongodbUri: process.env.MONGODB_URI,
   jwtSecret: process.env.JWT_SECRET,

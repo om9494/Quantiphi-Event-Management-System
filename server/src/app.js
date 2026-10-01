@@ -8,28 +8,33 @@ import { errorHandler } from './middleware/errorHandler.js';
 
 const app = express();
 
-// Security headers
+// ── Security headers (XSS, clickjacking, MIME sniffing, etc.) ──────────────
 app.use(helmet());
 
-// CORS — only allow requests from the React dev server (or deployed frontend)
-app.use(cors({ origin: env.clientUrl, credentials: true }));
+// ── CORS — only the configured frontend origin is allowed ──────────────────
+app.use(cors({
+  origin: env.clientUrl,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
 
-// Request logging (dev = coloured, production = combined)
+// ── HTTP request logger ────────────────────────────────────────────────────
 app.use(morgan(env.nodeEnv === 'production' ? 'combined' : 'dev'));
 
-// Body parsers
-app.use(express.json());
+// ── Body parsers ───────────────────────────────────────────────────────────
+app.use(express.json({ limit: '10kb' }));          // reject huge payloads
 app.use(express.urlencoded({ extended: true }));
 
-// All API routes
+// ── API routes ─────────────────────────────────────────────────────────────
 app.use('/api', router);
 
-// 404 handler for unmatched routes
+// ── 404 handler for unmatched routes ──────────────────────────────────────
 app.use((_req, res) => {
   res.status(404).json({ success: false, message: 'Route not found' });
 });
 
-// Centralised error handler (must be last)
+// ── Centralised error handler (must be last middleware) ────────────────────
 app.use(errorHandler);
 
 export default app;
